@@ -71,6 +71,7 @@ pub struct WasiSocketsCtx {
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
     pub(crate) max_io_size: NonZeroUsize,
+    pub(crate) ip_name_lookup_timeout: Option<std::time::Duration>,
 }
 
 impl Default for WasiSocketsCtx {
@@ -79,7 +80,17 @@ impl Default for WasiSocketsCtx {
             socket_addr_check: Default::default(),
             allowed_network_uses: Default::default(),
             max_io_size: crate::DEFAULT_MAX_IO_SIZE,
+            ip_name_lookup_timeout: None,
         }
+    }
+}
+
+impl WasiSocketsCtx {
+    /// Sets the timeout for new lookups in this context.
+    /// See [`crate::WasiCtxBuilder::ip_name_lookup_timeout`] for the default and
+    /// worker budget. Lookups already in progress keep their timeout.
+    pub fn set_ip_name_lookup_timeout(&mut self, timeout: std::time::Duration) {
+        self.ip_name_lookup_timeout = Some(timeout);
     }
 }
 

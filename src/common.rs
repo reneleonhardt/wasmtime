@@ -383,6 +383,9 @@ impl RunCommon {
                 .max_io_size
                 .unwrap_or(NonZeroUsize::new(2 << 20).unwrap()),
         );
+        if let Some(timeout) = self.common.wasi.ip_name_lookup_timeout {
+            builder.ip_name_lookup_timeout(timeout);
+        }
         if let Some(enable) = self.common.wasi.tcp {
             builder.allow_tcp(enable);
         }

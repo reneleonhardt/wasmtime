@@ -2,6 +2,33 @@ use test_programs::wasi::sockets::instance_network::Network;
 use test_programs::wasi::sockets::network::{ErrorCode, IpAddress};
 
 fn main() {
+    if std::env::var_os("LOOKUP_CANCEL_TEST").is_some() {
+        let network = Network::default();
+        for _ in 0..2048 {
+            match test_programs::wasi::sockets::ip_name_lookup::resolve_addresses(
+                &network,
+                "localhost",
+            ) {
+                Ok(stream) => drop(stream),
+                Err(ErrorCode::TemporaryResolverFailure) => {}
+                Err(error) => panic!("unexpected resolver error: {error}"),
+            }
+        }
+        assert_resolves_to("127.0.0.1", IpAddress::IPV4_LOOPBACK);
+        return;
+    }
+    if std::env::var_os("LOOKUP_DEADLINE_TEST").is_some() {
+        for _ in 0..256 {
+            assert_eq!(
+                Network::default()
+                    .blocking_resolve_addresses("localhost")
+                    .unwrap_err(),
+                ErrorCode::TemporaryResolverFailure
+            );
+            assert_resolves_to("127.0.0.1", IpAddress::IPV4_LOOPBACK);
+        }
+        return;
+    }
     // Valid domains
     assert_resolves("localhost");
 
@@ -104,5 +131,12 @@ fn assert_resolves_to(name: &str, expected: IpAddress) {
 }
 
 fn resolve(name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
-    Network::default().permissive_blocking_resolve_addresses(name)
+    for attempt in 0..100 {
+        let result = Network::default().permissive_blocking_resolve_addresses(name);
+        if !matches!(result, Err(ErrorCode::TemporaryResolverFailure)) || attempt == 99 {
+            return result;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    unreachable!()
 }

@@ -24,6 +24,15 @@ async fn run_with_builder(
     allow_blocking_current_thread: bool,
     configure: impl FnOnce(&mut WasiCtxBuilder),
 ) -> Result<()> {
+    run_with_resource_limit(path, allow_blocking_current_thread, None, configure).await
+}
+
+async fn run_with_resource_limit(
+    path: &str,
+    allow_blocking_current_thread: bool,
+    max_resources: Option<usize>,
+    configure: impl FnOnce(&mut WasiCtxBuilder),
+) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|config| {
@@ -43,6 +52,13 @@ async fn run_with_builder(
                 .build(),
         )
     })?;
+    if let Some(max) = max_resources {
+        store.data_mut().ctx().table.set_max_capacity(max);
+        store
+            .concurrent_resource_table()
+            .unwrap()
+            .set_max_capacity(max);
+    }
     let component = Component::from_file(&engine, path)?;
     let command = Command::instantiate_async(&mut store, &component, &linker)
         .await
@@ -136,6 +152,34 @@ async fn p3_filesystem_file_read_write_blocking() -> wasmtime::Result<()> {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_random_imports() -> wasmtime::Result<()> {
     run(P3_RANDOM_IMPORTS_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_ip_name_lookup_cancellation() -> wasmtime::Result<()> {
+    run_with_resource_limit(
+        P3_SOCKETS_IP_NAME_LOOKUP_COMPONENT,
+        false,
+        Some(64),
+        |builder| {
+            builder.env("LOOKUP_CANCEL_TEST", "1");
+        },
+    )
+    .await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_ip_name_lookup_deadline() -> wasmtime::Result<()> {
+    run_with_resource_limit(
+        P3_SOCKETS_IP_NAME_LOOKUP_COMPONENT,
+        false,
+        Some(64),
+        |builder| {
+            builder
+                .env("LOOKUP_DEADLINE_TEST", "1")
+                .ip_name_lookup_timeout(std::time::Duration::ZERO);
+        },
+    )
+    .await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

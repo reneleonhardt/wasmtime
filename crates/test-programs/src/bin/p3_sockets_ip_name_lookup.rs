@@ -12,7 +12,15 @@ test_programs::p3::export!(Component);
 /// enough time.
 async fn resolve(name: &str) -> Option<Result<Vec<IpAddress>, ErrorCode>> {
     const TIMEOUT_NS: u64 = 1_000_000_000;
-    let resolve = pin!(resolve_addresses(name.into()));
+    let resolve = pin!(async {
+        loop {
+            let result = resolve_addresses(name.into()).await;
+            if !matches!(result, Err(ErrorCode::TemporaryResolverFailure)) {
+                break result;
+            }
+            monotonic_clock::wait_for(TIMEOUT_NS / 100).await;
+        }
+    });
     let timeout = pin!(monotonic_clock::wait_for(TIMEOUT_NS));
     match select(resolve, timeout).await {
         Either::Left((result, _)) => Some(result),
@@ -66,6 +74,25 @@ async fn resolve_at_least_one_of(domains: &[&str]) {
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
+        if std::env::var_os("LOOKUP_CANCEL_TEST").is_some() {
+            for _ in 0..2048 {
+                let resolve = pin!(resolve_addresses("localhost".into()));
+                let cancel = pin!(monotonic_clock::wait_for(0));
+                drop(select(resolve, cancel).await);
+            }
+            assert_resolves_to("127.0.0.1", IpAddress::IPV4_LOOPBACK).await;
+            return Ok(());
+        }
+        if std::env::var_os("LOOKUP_DEADLINE_TEST").is_some() {
+            for _ in 0..256 {
+                assert!(matches!(
+                    resolve_addresses("localhost".into()).await,
+                    Err(ErrorCode::TemporaryResolverFailure)
+                ));
+                assert_resolves_to("127.0.0.1", IpAddress::IPV4_LOOPBACK).await;
+            }
+            return Ok(());
+        }
         // Valid domains
         assert_resolves("localhost").await;
 

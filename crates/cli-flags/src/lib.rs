@@ -603,6 +603,8 @@ wasmtime_option_group! {
         pub inherit_network: Option<bool>,
         /// Indicates whether `wasi:sockets/ip-name-lookup` is enabled or not.
         pub allow_ip_name_lookup: Option<bool>,
+        /// Timeout for each hostname lookup (default: 30s). A timeout returns a resolver error.
+        pub ip_name_lookup_timeout: Option<Duration>,
         /// Indicates whether `wasi:sockets` TCP support is enabled or not.
         pub tcp: Option<bool>,
         /// Indicates whether `wasi:sockets` UDP support is enabled or not.

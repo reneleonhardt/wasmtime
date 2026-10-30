@@ -162,6 +162,24 @@ async fn p2_big_random_buf() {
     run(P2_BIG_RANDOM_BUF_COMPONENT, |_| {}).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_ip_name_lookup_cancellation() {
+    run(P2_IP_NAME_LOOKUP_COMPONENT, |builder| {
+        builder.env("LOOKUP_CANCEL_TEST", "1");
+    })
+    .await
+    .unwrap();
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_ip_name_lookup_deadline() {
+    run(P2_IP_NAME_LOOKUP_COMPONENT, |builder| {
+        builder
+            .env("LOOKUP_DEADLINE_TEST", "1")
+            .ip_name_lookup_timeout(std::time::Duration::ZERO);
+    })
+    .await
+    .unwrap();
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_ip_name_lookup() {
     run(P2_IP_NAME_LOOKUP_COMPONENT, |_| {}).await.unwrap()
 }

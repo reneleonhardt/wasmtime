@@ -433,6 +433,18 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Sets the timeout for each hostname lookup (default: 30 seconds).
+    ///
+    /// A zero timeout rejects hostname lookups immediately. Numeric addresses
+    /// bypass resolution. Timeouts return `temporary-resolver-failure`.
+    /// When all worker slots are busy, new lookups return the same error without
+    /// queuing work. Cancellation stops the guest from waiting. A running OS
+    /// lookup keeps one of the process's 16 worker slots until it finishes.
+    pub fn ip_name_lookup_timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.sockets.set_ip_name_lookup_timeout(timeout);
+        self
+    }
+
     /// Allow usage of UDP
     ///
     /// By default this is disabled.
