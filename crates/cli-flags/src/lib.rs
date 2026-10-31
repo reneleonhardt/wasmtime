@@ -65,6 +65,9 @@ wasmtime_option_group! {
         /// address space.
         pub memory_may_move: Option<bool>,
 
+        /// Lock new linear memories, exclude them from Linux core dumps, and cap each reservation in bytes.
+        pub memory_locking: Option<usize>,
+
         /// Initial virtual memory allocation size for memories.
         pub memory_reservation: Option<u64>,
 
@@ -1021,6 +1024,10 @@ impl CommonOptions {
             true => err,
         }
 
+        if let Some(maximum) = self.opts.memory_locking {
+            config.memory_locking(maximum);
+        }
+
         let memory_reservation = self
             .opts
             .memory_reservation
@@ -1425,6 +1432,7 @@ impl CommonOptions {
             target: engine.get_target(),
             opts: OptimizeOptions {
                 memory_may_move: Some(engine.get_memory_may_move()),
+                memory_locking: engine.get_memory_locking(),
                 memory_reservation: Some(engine.get_memory_reservation()),
                 memory_reservation_for_growth: Some(engine.get_memory_reservation_for_growth()),
                 memory_guard_size: Some(engine.get_memory_guard_size()),
@@ -1638,6 +1646,34 @@ mod tests {
     use wasmtime::{OptLevel, RegallocAlgorithm};
 
     use super::*;
+
+    #[test]
+    fn memory_locking_roundtrip() {
+        let mut options: CommonOptions =
+            toml::from_str("[optimize]\nmemory-locking = 65536").unwrap();
+        assert_eq!(options.opts.memory_locking, Some(65536));
+        #[cfg(feature = "clap")]
+        {
+            #[derive(clap::Parser)]
+            struct Cli {
+                #[command(flatten)]
+                common: CommonOptions,
+            }
+            let mut cli =
+                <Cli as clap::Parser>::parse_from(["wasmtime", "-O", "memory-locking=65536"])
+                    .common;
+            cli.configure().unwrap();
+            assert_eq!(cli.opts.memory_locking, options.opts.memory_locking);
+        }
+        let config = options.config(None).unwrap();
+        match Engine::new(&config) {
+            Ok(engine) => assert_eq!(
+                CommonOptions::from_engine(&engine).opts.memory_locking,
+                Some(65536)
+            ),
+            Err(error) => assert!(error.to_string().contains("Linux virtual-memory runtime")),
+        }
+    }
 
     #[test]
     fn from_toml() {

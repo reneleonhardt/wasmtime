@@ -35,3 +35,16 @@ read the documentation for [`Memory`] as well.
 ```
 
 <!-- langtabs-end -->
+
+## Linux memory locking
+
+[`Config::memory_locking`] can lock new linear memories and exclude them from
+Linux core dumps. The CLI option is `-O memory-locking=<bytes>`. The byte limit
+caps each protected reservation. The process's `RLIMIT_MEMLOCK` must cover all
+protected reservations, including unused pages. Growth stays within the initial
+reservation. This option requires the on-demand allocator and is disabled by default.
+
+This protects linear memory against swapping and native core dumps. It does not
+add guard pages around guest allocations or protect copies outside linear memory.
+
+[`Config::memory_locking`]: https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_locking

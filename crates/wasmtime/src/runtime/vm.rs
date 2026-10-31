@@ -109,6 +109,8 @@ pub use crate::runtime::vm::instance::{
     PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
 pub use crate::runtime::vm::interpreter::*;
+#[cfg(all(target_os = "linux", has_virtual_memory))]
+pub use crate::runtime::vm::memory::LockedMemoryCreator;
 pub use crate::runtime::vm::memory::{Memory, SharedMemory};
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;

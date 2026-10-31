@@ -53,7 +53,7 @@ pub async fn create_memory(
     let allocator = SingleMemoryInstance {
         preallocation,
         ondemand: OnDemandInstanceAllocator::new(
-            store.engine().config().mem_creator.clone(),
+            store.engine().config().memory_creator()?,
             0,
             false,
         ),

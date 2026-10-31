@@ -165,6 +165,7 @@ pub struct Config {
     pub(crate) cache: Option<Cache>,
     #[cfg(feature = "runtime")]
     pub(crate) mem_creator: Option<Arc<dyn MemoryCreator>>,
+    pub(crate) memory_locking: Option<usize>,
     #[cfg(feature = "runtime")]
     pub(crate) custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
@@ -277,6 +278,7 @@ impl Config {
             profiling_strategy: ProfilingStrategy::None,
             #[cfg(feature = "runtime")]
             mem_creator: None,
+            memory_locking: None,
             #[cfg(feature = "runtime")]
             custom_code_memory: None,
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
@@ -1748,6 +1750,37 @@ impl Config {
         self
     }
 
+    /// Locks new linear memories in RAM and excludes them from Linux core dumps.
+    ///
+    /// This option is disabled by default. `maximum` caps the protected reservation
+    /// for each memory, rounded down to host pages. The reservation counts against the process's
+    /// `RLIMIT_MEMLOCK`, including pages not yet touched. Creation fails if the
+    /// OS cannot protect the whole reservation. The OS locks each page on
+    /// first access. Growth stays within the initial reservation and does not move
+    /// memory. Copy-on-write images are copied into protected memory.
+    /// Linux processes with `CAP_IPC_LOCK` can bypass the quota. Locks are not
+    /// inherited across `fork()`.
+    ///
+    /// This option requires Linux with `mlock2` and the on-demand allocator. Custom memory
+    /// creators and automatic Wasm core dumps are incompatible. Imported
+    /// memories retain their creator's policy. This does not protect GC heaps,
+    /// host buffers, stacks, snapshots, or reads within a guest.
+    pub fn memory_locking(&mut self, maximum: usize) -> &mut Self {
+        self.memory_locking = Some(maximum);
+        self
+    }
+
+    #[cfg(feature = "runtime")]
+    pub(crate) fn memory_creator(&self) -> Result<Option<Arc<dyn MemoryCreator>>> {
+        #[cfg(all(target_os = "linux", has_virtual_memory))]
+        if let Some(maximum) = self.memory_locking {
+            return Ok(Some(try_new::<Arc<_>>(
+                crate::runtime::vm::LockedMemoryCreator(maximum),
+            )?));
+        }
+        Ok(self.mem_creator.clone())
+    }
+
     /// Sets a custom memory creator.
     ///
     /// Custom memory creators are used when creating host `Memory` objects or when
@@ -2692,6 +2725,34 @@ impl Config {
     pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
         let features = self.features();
 
+        if self.memory_locking.is_some() {
+            ensure!(
+                cfg!(all(
+                    target_os = "linux",
+                    has_virtual_memory,
+                    feature = "runtime"
+                )),
+                "memory locking requires the Linux virtual-memory runtime"
+            );
+            ensure!(
+                matches!(
+                    self.allocation_strategy,
+                    InstanceAllocationStrategy::OnDemand
+                ),
+                "memory locking requires the on-demand allocator"
+            );
+            #[cfg(feature = "runtime")]
+            ensure!(
+                self.mem_creator.is_none(),
+                "memory locking cannot use a custom memory creator"
+            );
+            #[cfg(feature = "coredump")]
+            ensure!(
+                !self.coredump_on_trap,
+                "memory locking cannot use Wasm coredumps"
+            );
+        }
+
         // First validate that the selected compiler backend and configuration
         // supports the set of `features` that are enabled. This will help
         // provide more first class errors instead of panics about unsupported
@@ -2972,7 +3033,7 @@ impl Config {
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
                 let mut _allocator = try_new::<Box<_>>(OnDemandInstanceAllocator::new(
-                    self.mem_creator.clone(),
+                    self.memory_creator()?,
                     self.async_stack_size,
                     self.async_stack_zeroing,
                 ))?;
@@ -4950,6 +5011,11 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
 // are not as comprehensive as `Config` options, but it's expected that the set
 // will settle/grow over time.
 impl Engine {
+    /// Returns the configured [`Config::memory_locking`] limit, or `None` if disabled.
+    pub fn get_memory_locking(&self) -> Option<usize> {
+        self.config().memory_locking
+    }
+
     /// Returns the configured [`Config::memory_may_move`] value.
     pub fn get_memory_may_move(&self) -> bool {
         self.tunables().memory_may_move

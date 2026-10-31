@@ -92,6 +92,11 @@ pub use self::mmap::MmapMemory;
 mod malloc;
 pub use self::malloc::MallocMemory;
 
+#[cfg(all(target_os = "linux", has_virtual_memory))]
+mod locked;
+#[cfg(all(target_os = "linux", has_virtual_memory))]
+pub use self::locked::LockedMemoryCreator;
+
 #[cfg(feature = "pooling-allocator")]
 mod static_;
 #[cfg(feature = "pooling-allocator")]

@@ -40,8 +40,18 @@ impl SharedMemory {
         // Note that without a limiter being passed to `limit_new` this
         // `assert_ready` should never panic.
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
-        let mmap_memory = MmapMemory::new(ty, &memory_tunables, minimum_bytes, maximum_bytes)?;
-        let boxed: Box<dyn crate::LinearMemory> = try_new::<Box<_>>(mmap_memory)?;
+        let boxed: Box<dyn crate::LinearMemory> = if engine.config().memory_locking.is_some() {
+            let request =
+                crate::MemoryRequest::new(ty, &memory_tunables, minimum_bytes, maximum_bytes);
+            engine
+                .config()
+                .memory_creator()?
+                .unwrap()
+                .new_memory(&request)?
+        } else {
+            let mmap_memory = MmapMemory::new(ty, &memory_tunables, minimum_bytes, maximum_bytes)?;
+            try_new::<Box<_>>(mmap_memory)?
+        };
         Self::wrap(
             engine,
             ty,
