@@ -5155,7 +5155,6 @@ dependencies = [
  "rustix-linux-procfs",
  "tempfile",
  "test-log",
- "test-programs-artifacts",
  "thiserror 2.0.17",
  "tokio",
  "tracing",

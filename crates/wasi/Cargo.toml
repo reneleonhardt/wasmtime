@@ -35,7 +35,6 @@ rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros", "fs"] }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
-test-programs-artifacts = { workspace = true }
 tempfile = { workspace = true }
 wasmtime = { workspace = true, features = ['default', 'incremental-cache'] }
 wasmtime-test-util = { workspace = true }
